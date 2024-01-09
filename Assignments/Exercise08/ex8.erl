@@ -30,28 +30,28 @@ echo() ->
 
 
 % 1.
-filter(I) -> spawn(fun() -> filter_loop(I, undefined) end).
+filter(I) -> spawn(fun() -> filter_loop(I, undefined, 0) end).
 
 
-filter_loop(I, Pid) ->
+filter_loop(I, Pid, Count) ->
     log("~p: Filter received message: {I: ~p, Sender: ~p}~n", [self(), I, Pid]),
     receive
         {set_sender, NewPid} ->
             log("~p: {set_sender, ~p}~n", [self(), NewPid]),
-            filter_loop(I, NewPid);
+            filter_loop(I, NewPid, Count);
 
         {filter, Msg} ->
             log("~p: {filter, ~p}~n", [self(), Msg]),
             case Pid of
                 undefined ->
                     log("~p: ERROR: NO PID SET~n", [self()]);
-                _ when Msg rem I == 0 -> 
+                _ when Count rem I == (I - 1) -> 
                     log("~p: MESSAGE SUCCESSFULLY SENT TO ~p, Msg = ~p, I = ~p~n", [self(), Pid, Msg, I]),
                     Pid ! {filter, Msg};
                 _ ->
                     log("~p: MESSAGE NOT SENT, Msg = ~p, I = ~p~n", [self(), Msg, I])
             end,
-            filter_loop(I, Pid);
+            filter_loop(I, Pid, Count + 1);
 
         stop ->
             log("~p: Stopped filter process: {I: ~p, Sender: ~p}~n", [self(), I, Pid]),
