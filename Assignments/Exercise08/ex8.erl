@@ -1,32 +1,91 @@
 -module(ex8).
 -export([
+    echo/0,
+    filter/1,
+    collector/0,
     test_echo/0,
     test_filter/0,
     test_collector/0,
-    test_pipeline/0,
-    echo/0,
-    filter/1,
-    collector/0
+    test_pipeline/0
 ]).
 
 log_enabled() -> false.
 
 log(Format, Args) ->
-    Le = log_enabled(),
-    io:format("Le: ~p~n", [Le]),
-    if false -> io:format(Format, Args)
+    case log_enabled() of
+        true -> io:format(Format, Args);
+        false -> ok
     end.
 
 
 echo() ->
-   receive
-   	   stop -> ok;
-   	   Msg -> io:format("Echo: ~p\n",[Msg]), echo()
-   end.
+    receive
+        stop ->
+            log("~p: Stopped echo process~n", [self()]),
+            ok;
+        Msg ->
+            log("~p: Echo received message: ~p~n", [self(), Msg]),
+            io:format("Echo: ~p\n",[Msg]), echo()
+    end.
+
+
+% 1.
+filter(I) -> spawn(fun() -> filter_loop(I, undefined) end).
+
+
+filter_loop(I, Pid) ->
+    log("~p: Filter received message: {I: ~p, Sender: ~p}~n", [self(), I, Pid]),
+    receive
+        {set_sender, NewPid} ->
+            log("~p: {set_sender, ~p}~n", [self(), NewPid]),
+            filter_loop(I, NewPid);
+
+        {filter, Msg} ->
+            log("~p: {filter, ~p}~n", [self(), Msg]),
+            case Pid of
+                undefined ->
+                    log("~p: ERROR: NO PID SET~n", [self()]);
+                _ when Msg rem I == 0 -> 
+                    log("~p: MESSAGE SUCCESSFULLY SENT TO ~p, Msg = ~p, I = ~p~n", [self(), Pid, Msg, I]),
+                    Pid ! {filter, Msg};
+                _ ->
+                    log("~p: MESSAGE NOT SENT, Msg = ~p, I = ~p~n", [self(), Msg, I])
+            end,
+            filter_loop(I, Pid);
+
+        stop ->
+            log("~p: Stopped filter process: {I: ~p, Sender: ~p}~n", [self(), I, Pid]),
+            ok
+    end.
+
+% 2.
+collector() -> spawn(fun() -> collector_loop([], undefined) end).
+
+
+collector_loop(List, Pid) ->
+    log("~p: Collector received message: {Sender: ~p}~n", [self(), Pid]),
+    receive
+        {set_sender, NewPid} ->
+            log("~p: {set_sender, ~p}~n", [self(), NewPid]),
+            collector_loop(List, NewPid);
+
+        reset ->
+            log("~p: reset~n", [self()]),
+            collector_loop([], Pid);
+
+        {filter, Msg} ->
+            log("~p: {filter: ~p}~n", [self(), Msg]),
+            NewList = List ++ [Msg],
+            Pid ! {filter, NewList},
+            collector_loop(NewList, Pid);
+
+        stop -> 
+            log("~p: Stopped collector process: {Sender: ~p}~n", [self(), Pid]),
+            ok
+    end.
+
 
 test_echo() ->
-
-    io:format("TESTSETST\n"),
     
     Echo = spawn(?MODULE, echo,[]),
     
@@ -65,8 +124,6 @@ test_echo() ->
     P2!{filter,191},
     P2!{filter,33},
 
-    P2!stop,
-
     ok.
 
 test_filter() ->
@@ -92,13 +149,10 @@ test_filter() ->
     F1!{filter, 10},
     F1!{filter, 11},
 
-    F1!stop,
-    F2!stop,
-    F3!stop,
-
     ok.
 
 test_collector() -> 
+
     C1 = collector(),
     E1 = spawn(?MODULE, echo,[]),
 
@@ -114,12 +168,11 @@ test_collector() ->
     C1!{filter, b},
     C1!{filter, 3},
 
-    C1!stop,
-    E1!stop,
-
     ok.
 
+% 3.
 test_pipeline() ->
+
     P2 = filter(2),
     C1 = collector(),
     E1 = spawn(?MODULE, echo,[]),
@@ -160,64 +213,4 @@ test_pipeline() ->
     P2!{filter,191},
     P2!{filter,33},
 
-    P2!stop,
-    C1!stop,
-    E1!stop,
-
     ok.
-
-
-% a)
-filter(I) -> spawn(fun() -> filter_loop(I, undefined) end).
-
-
-filter_loop(I, Pid) ->
-    log("~p: Filter received message: {I: ~p, Sender: ~p}~n", [self(), I, Pid]),
-    receive
-        {set_sender, NewPid} ->
-            log("~p: {set_sender, ~p}~n", [self(), NewPid]),
-            filter_loop(I, NewPid);
-
-        {filter, Msg} ->
-            log("~p: {filter, ~p}~n", [self(), Msg]),
-            case Pid of
-                undefined ->
-                    log("~p: ERROR: NO PID SET~n", [self()]);
-                _ when Msg rem I == 0 -> 
-                    log("~p: MESSAGE SUCCESSFULLY SENT TO ~p, Msg = ~p, I = ~p~n", [self(), Pid, Msg, I]),
-                    Pid ! {filter, Msg};
-                _ ->
-                    log("~p: MESSAGE NOT SENT, Msg = ~p, I = ~p~n", [self(), Msg, I])
-            end,
-            filter_loop(I, Pid);
-
-        stop ->
-            log("~p: Stopped Process: {I: ~p, Sender: ~p}~n", [self(), I, Pid]),
-            ok
-    end.
-
-% 2.
-collector() -> spawn(fun() -> collector_loop([], undefined) end).
-
-
-collector_loop(List, Pid) ->
-    log("~p: Collector received message: {Sender: ~p}~n", [self(), Pid]),
-    receive
-        {set_sender, NewPid} ->
-            log("~p: {set_sender, ~p}~n", [self(), NewPid]),
-            collector_loop(List, NewPid);
-
-        reset ->
-            log("~p: reset~n", [self()]),
-            collector_loop([], Pid);
-
-        {filter, Msg} ->
-            log("~p: {filter: ~p}~n", [self(), Msg]),
-            NewList = List ++ [Msg],
-            Pid ! {filter, NewList},
-            collector_loop(NewList, Pid);
-
-        stop -> 
-            log("~p: Stopped Process: {Sender: ~p}~n", [self(), Pid]),
-            ok
-    end.
