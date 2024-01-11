@@ -7,6 +7,7 @@ log_enabled() -> true.
 -define(PID_LENGTH, 9).
 -define(SOURCE_LENGTH, 5).
 
+% Formatted logging
 log(Pid, Source, Entry, Args) ->
     case log_enabled() of
         true ->
