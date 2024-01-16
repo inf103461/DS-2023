@@ -12,10 +12,10 @@ log(Pid, Source, Entry, Args) ->
     case log_enabled() of
         true ->
             PidStr = io_lib:format("~p", [Pid]),
-            PidStr = pad_string(PidStr, ?PID_LENGTH - string:length(PidStr)),
+            PidStrPad = pad_string(PidStr, ?PID_LENGTH - string:length(PidStr)),
             SourceStr = pad_string(Source, ?SOURCE_LENGTH - string:length(Source)),
 
-            io:format(PidStr ++ ", " ++ SourceStr ++ ": " ++ Entry ++ "~n", Args);
+            io:format(PidStrPad ++ ", " ++ SourceStr ++ ": " ++ Entry ++ "~n", Args);
         false -> ok
     end.
 
